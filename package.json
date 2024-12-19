@@ -1,6 +1,6 @@
 {
   "name": "@alexy4744/nestjs-nats-jetstream-transporter",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "NATS JetStream transporter for NestJS",
   "keywords": [
     "nestjs",

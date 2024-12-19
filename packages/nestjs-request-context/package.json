@@ -1,0 +1,30 @@
+{
+  "name": "@alexy4744/nestjs-request-context",
+  "version": "1.0.2",
+  "description": "Keep track of request-level data in NestJS using AsyncLocalStorage",
+  "keywords": [
+    "nestjs",
+    "middleware",
+    "async-local-storage",
+    "request",
+    "context"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexy4744/packages.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexy4744/packages/issues"
+  },
+  "homepage": "https://github.com/alexy4744/packages#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^7.0.0",
+    "@nestjs/core": "^7.0.0",
+    "reflect-metadata": "^0.1.12",
+    "rxjs": "^6.0.0"
+  }
+}

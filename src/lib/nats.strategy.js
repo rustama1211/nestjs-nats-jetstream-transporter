@@ -151,7 +151,13 @@ class NatsTransportStrategy extends microservices_1.Server {
                 }
                 try {
                     // force to create consumer
-                    let consumerInfo = yield jsm.consumers.info(pattern, defaultConsumerName);
+                    let consumerInfo;
+                    try {
+                        consumerInfo = yield jsm.consumers.info(pattern, defaultConsumerName);
+                    }
+                    catch (err) {
+                        consumerInfo = null;
+                    }
                     if (!consumerInfo) {
                         //create consumer based event pattern
                         consumerInfo = yield jsm.consumers.add(pattern, consumerConfig);
