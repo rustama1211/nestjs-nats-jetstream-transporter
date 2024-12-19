@@ -159,6 +159,8 @@ class NatsTransportStrategy extends microservices_1.Server {
                     }
                     else {
                         //update consumer absed event pattern
+                        // cannot update replay policy
+                        delete consumerConfig.replay_policy;
                         consumerInfo = yield jsm.consumers.update(pattern, defaultConsumerName, consumerConfig);
                     }
                     const eventConsumer = client.consumers.get(consumerInfo.stream_name, consumerInfo.name);
