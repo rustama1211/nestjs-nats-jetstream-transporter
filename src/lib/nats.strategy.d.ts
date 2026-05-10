@@ -1,6 +1,7 @@
 import { CustomTransportStrategy, MessageHandler, Server } from "@nestjs/microservices";
 import { Logger } from "@nestjs/common";
-import { Codec, ConnectionOptions, JetStreamClient, JetStreamManager, JsMsg, Msg, NatsConnection, StreamInfo } from "nats";
+import { Codec, ConnectionOptions, Msg, NatsConnection } from "@nats-io/nats-core";
+import { JetStreamClient, JetStreamManager, JsMsg, StreamInfo } from "@nats-io/jetstream";
 import { noop } from "rxjs";
 import { NatsTransportStrategyOptions } from "./interfaces/nats-transport-strategy-options.interface";
 import { NatsStreamConfig } from "./interfaces/nats-stream-config.interface";

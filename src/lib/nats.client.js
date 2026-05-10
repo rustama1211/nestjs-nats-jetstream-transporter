@@ -4,13 +4,15 @@ exports.NatsClient = void 0;
 const tslib_1 = require("tslib");
 const microservices_1 = require("@nestjs/microservices");
 const common_1 = require("@nestjs/common");
-const nats_1 = require("nats");
+const transport_node_1 = require("@nats-io/transport-node");
+const jetstream_1 = require("@nats-io/jetstream");
 const rxjs_1 = require("rxjs");
+const nats_codec_1 = require("./nats.codec");
 class NatsClient extends microservices_1.ClientProxy {
     constructor(options = {}) {
         super();
         this.options = options;
-        this.codec = options.codec || nats_1.JSONCodec();
+        this.codec = options.codec || nats_codec_1.JSONCodec();
         this.logger = new common_1.Logger(this.constructor.name);
     }
     connect() {
@@ -35,10 +37,10 @@ class NatsClient extends microservices_1.ClientProxy {
         });
     }
     createJetStreamClient(connection) {
-        return connection.jetstream();
+        return jetstream_1.jetstream(connection);
     }
     createNatsConnection(options = {}) {
-        return nats_1.connect(options);
+        return transport_node_1.connect(options);
     }
     getConnection() {
         return this.connection;
@@ -55,7 +57,7 @@ class NatsClient extends microservices_1.ClientProxy {
                     const data = typeof status.data === "object" ? JSON.stringify(status.data) : status.data;
                     const message = `(${status.type}): ${data}`;
                     switch (status.type) {
-                        case "pingTimer":
+                        case "ping":
                         case "reconnecting":
                         case "staleConnection":
                             this.logger.debug(message);
@@ -112,4 +114,3 @@ class NatsClient extends microservices_1.ClientProxy {
     }
 }
 exports.NatsClient = NatsClient;
-//# sourceMappingURL=nats.client.js.map

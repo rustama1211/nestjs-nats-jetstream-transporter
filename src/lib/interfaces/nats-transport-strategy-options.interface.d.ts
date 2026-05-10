@@ -1,4 +1,5 @@
-import { Codec, ConnectionOptions, ConsumerConfig, JsMsg } from "nats";
+import { Codec, ConnectionOptions } from "@nats-io/nats-core";
+import { ConsumerConfig, JsMsg } from "@nats-io/jetstream";
 import { NatsStreamConfig } from "./nats-stream-config.interface";
 export interface NatsTransportStrategyOptions {
     /**

@@ -1,6 +1,7 @@
 import { ClientProxy, ReadPacket, WritePacket } from "@nestjs/microservices";
 import { Logger } from "@nestjs/common";
-import { Codec, JetStreamClient, NatsConnection, ConnectionOptions } from "nats";
+import { Codec, NatsConnection, ConnectionOptions } from "@nats-io/nats-core";
+import { JetStreamClient } from "@nats-io/jetstream";
 import { noop } from "rxjs";
 import { NatsClientOptions } from "./interfaces/nats-client-options.interface";
 export declare class NatsClient extends ClientProxy {

@@ -4,16 +4,18 @@ exports.NatsTransportStrategy = void 0;
 const tslib_1 = require("tslib");
 const microservices_1 = require("@nestjs/microservices");
 const common_1 = require("@nestjs/common");
-const nats_1 = require("nats");
-// import { ConsumerOptsBuilderImpl } from "nats/lib/jetstream/types";
+const transport_node_1 = require("@nats-io/transport-node");
+const nats_core_1 = require("@nats-io/nats-core");
+const jetstream_1 = require("@nats-io/jetstream");
 const rxjs_1 = require("rxjs");
 const nats_context_1 = require("./nats.context");
 const nats_constants_1 = require("./nats.constants");
+const nats_codec_1 = require("./nats.codec");
 class NatsTransportStrategy extends microservices_1.Server {
     constructor(options = {}) {
         super();
         this.options = options;
-        this.codec = options.codec || nats_1.JSONCodec();
+        this.codec = options.codec || nats_codec_1.JSONCodec();
         this.logger = new common_1.Logger("NatsServer");
     }
     listen(callback) {
@@ -47,13 +49,13 @@ class NatsTransportStrategy extends microservices_1.Server {
         return parts.join("-").replace(/\s|\.|>|\*/g, "-");
     }
     createJetStreamClient(connection) {
-        return connection.jetstream();
+        return jetstream_1.jetstream(connection);
     }
     createJetStreamManager(connection) {
-        return connection.jetstreamManager();
+        return jetstream_1.jetstreamManager(connection);
     }
     createNatsConnection(options = {}) {
-        return nats_1.connect(options);
+        return transport_node_1.connect(options);
     }
     createStreams(manager, configs = []) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -102,7 +104,7 @@ class NatsTransportStrategy extends microservices_1.Server {
                     const data = typeof status.data === "object" ? JSON.stringify(status.data) : status.data;
                     const message = `(${status.type}): ${data}`;
                     switch (status.type) {
-                        case "pingTimer":
+                        case "ping":
                         case "reconnecting":
                         case "staleConnection":
                             this.logger.debug(message);
@@ -137,10 +139,7 @@ class NatsTransportStrategy extends microservices_1.Server {
             const eventHandlers = [...this.messageHandlers.entries()].filter(([, handler]) => handler.isEventHandler);
             for (const [pattern, handler] of eventHandlers) {
                 let defaultConsumerName = `subscriber-${pattern}`;
-                // Need to access config options that is not exposed by the ConsumerOptsBuilder interface
-                // https://github.com/nats-io/nats.deno/blob/main/nats-base-client/jsconsumeropts.ts#L55
-                //const consumerOptions = consumerOpts() as ConsumerOptsBuilderImpl;
-                const consumerConfig = { name: `subscriber-${pattern}`, ack_policy: nats_1.AckPolicy.Explicit, inactive_threshold: nats_1.nanos(2 * 60 * 1000), replay_policy: nats_1.ReplayPolicy.Original };
+                const consumerConfig = { name: `subscriber-${pattern}`, ack_policy: jetstream_1.AckPolicy.Explicit, inactive_threshold: nats_core_1.nanos(2 * 60 * 1000), replay_policy: jetstream_1.ReplayPolicy.Original };
                 if (this.options.consumer) {
                     this.options.consumer(consumerConfig);
                 }
@@ -159,12 +158,9 @@ class NatsTransportStrategy extends microservices_1.Server {
                         consumerInfo = null;
                     }
                     if (!consumerInfo) {
-                        //create consumer based event pattern
                         consumerInfo = yield jsm.consumers.add(pattern, consumerConfig);
-                        //newConsumerInfo.
                     }
                     else {
-                        //update consumer absed event pattern
                         // cannot update replay policy
                         delete consumerConfig.replay_policy;
                         consumerInfo = yield jsm.consumers.update(pattern, defaultConsumerName, consumerConfig);
@@ -183,51 +179,6 @@ class NatsTransportStrategy extends microservices_1.Server {
                     }
                     throw error;
                 }
-                /*if (this.options.consumer?.name) {
-                  defaultConsumerName = consumerOptions.config.name;
-                }
-          
-                if (this.options.consumer?) {
-                  consumerOptions.durable(
-                    this.createDurableName(consumerOptions.config.durable_name, pattern)
-                  );
-                  defaultConsumerName = this.createDurableName(consumerOptions.config.durable_name, pattern);
-                }
-          
-          
-                consumerOptions.callback((error, message) => {
-                  if (error) {
-                    return this.logger.error(error.message, error.stack);
-                  }
-          
-                  if (message) {
-                    return this.handleJetStreamMessage(message, handler);
-                  }
-                });
-          
-                consumerOptions.deliverTo(createInbox());
-          
-                consumerOptions.manualAck();
-                try {
-                  // force to create consumer
-                  if (defaultConsumerName) {
-                    const consumerInfo: ConsumerInfo = await jsm.consumers.info(pattern, defaultConsumerName);
-                    if (!consumerInfo) {
-                      //create consumer based event patter
-                      jsm.consumers.add(pattern, consumerOptions);
-                    }
-                  }
-                  
-                  await client.subscribe(pattern, consumerOptions);
-          
-                  this.logger.log(`Subscribed to ${pattern} events`);
-                } catch (error: Error) {
-                  if (error.message === "no stream matches subject") {
-                    throw new Error(`Cannot find stream with the ${pattern} event pattern`);
-                  }
-          
-                  throw error;
-                }*/
             }
         });
     }
@@ -267,4 +218,3 @@ class NatsTransportStrategy extends microservices_1.Server {
     }
 }
 exports.NatsTransportStrategy = NatsTransportStrategy;
-//# sourceMappingURL=nats.strategy.js.map

@@ -1,5 +1,6 @@
 import { BaseRpcContext } from "@nestjs/microservices/ctx-host/base-rpc.context";
-import { JsMsg, Msg, MsgHdrs } from "nats";
+import { Msg, MsgHdrs } from "@nats-io/nats-core";
+import { JsMsg } from "@nats-io/jetstream";
 declare type NatsContextArgs = [JsMsg | Msg];
 export declare class NatsContext extends BaseRpcContext<NatsContextArgs> {
     constructor(args: NatsContextArgs);
