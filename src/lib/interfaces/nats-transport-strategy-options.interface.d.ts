@@ -24,6 +24,15 @@ export interface NatsTransportStrategyOptions {
      */
     onError?: (message: JsMsg) => void;
     /**
+     * How many consecutive missed heartbeats are tolerated before the consume
+     * is stopped and re-established. Lower reacts faster, higher is less
+     * sensitive to a briefly slow server.
+     *
+     * @default 2
+     * @see https://github.com/nats-io/nats.js/tree/main/jetstream#heartbeats
+     */
+    maxHeartbeatsMissed?: number;
+    /**
      * Queue group name
      * @see https://docs.nats.io/nats-concepts/queue
      */

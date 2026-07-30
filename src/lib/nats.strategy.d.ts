@@ -1,7 +1,7 @@
 import { CustomTransportStrategy, MessageHandler, Server } from "@nestjs/microservices";
 import { Logger } from "@nestjs/common";
 import { Codec, ConnectionOptions, Msg, NatsConnection } from "@nats-io/nats-core";
-import { JetStreamClient, JetStreamManager, JsMsg, StreamInfo } from "@nats-io/jetstream";
+import { Consumer, ConsumerMessages, JetStreamClient, JetStreamManager, JsMsg, StreamInfo } from "@nats-io/jetstream";
 import { noop } from "rxjs";
 import { NatsTransportStrategyOptions } from "./interfaces/nats-transport-strategy-options.interface";
 import { NatsStreamConfig } from "./interfaces/nats-stream-config.interface";
@@ -12,6 +12,8 @@ export declare class NatsTransportStrategy extends Server implements CustomTrans
     protected connection?: NatsConnection;
     protected jetstreamClient?: JetStreamClient;
     protected jetstreamManager?: JetStreamManager;
+    protected stopped: boolean;
+    protected readonly maxHeartbeatsMissed: number;
     constructor(options?: NatsTransportStrategyOptions);
     listen(callback: typeof noop): Promise<void>;
     close(): Promise<void>;
@@ -28,6 +30,18 @@ export declare class NatsTransportStrategy extends Server implements CustomTrans
     handleNatsMessage(message: Msg, handler: MessageHandler): Promise<void>;
     handleStatusUpdates(connection: NatsConnection): Promise<void>;
     subscribeToEventPatterns(client: JetStreamClient, jsm: JetStreamManager): Promise<void>;
+    /**
+     * Consumes an event pattern, re-establishing the consume whenever it ends
+     * because the server stopped sending heartbeats.
+     * @see https://github.com/nats-io/nats.js/tree/main/jetstream#heartbeats
+     */
+    consumeWithHeartbeatRecovery(consumer: Consumer, handler: MessageHandler, pattern: string): Promise<void>;
+    /**
+     * Ends the consume once maxHeartbeatsMissed is reached so that
+     * consumeWithHeartbeatRecovery() can replace it.
+     */
+    watchHeartbeats(messages: ConsumerMessages, pattern: string): Promise<void>;
+    delay(ms: number): Promise<void>;
     subscribeToMessagePatterns(connection: NatsConnection): void;
     /**
      * Creates a new stream if it doesn't exist, otherwise updates the existing stream

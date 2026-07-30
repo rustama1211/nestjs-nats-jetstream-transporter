@@ -11,12 +11,16 @@ const rxjs_1 = require("rxjs");
 const nats_context_1 = require("./nats.context");
 const nats_constants_1 = require("./nats.constants");
 const nats_codec_1 = require("./nats.codec");
+/** How long to wait before re-establishing a consume that ended. */
+const RESUBSCRIBE_DELAY = 1000;
 class NatsTransportStrategy extends microservices_1.Server {
     constructor(options = {}) {
         super();
         this.options = options;
         this.codec = options.codec || nats_codec_1.JSONCodec();
         this.logger = new common_1.Logger("NatsServer");
+        this.stopped = false;
+        this.maxHeartbeatsMissed = options.maxHeartbeatsMissed || 2;
     }
     listen(callback) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -33,6 +37,7 @@ class NatsTransportStrategy extends microservices_1.Server {
     }
     close() {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            this.stopped = true;
             if (this.connection) {
                 yield this.connection.drain();
                 this.connection = undefined;
@@ -165,12 +170,8 @@ class NatsTransportStrategy extends microservices_1.Server {
                         delete consumerConfig.replay_policy;
                         consumerInfo = yield jsm.consumers.update(pattern, defaultConsumerName, consumerConfig);
                     }
-                    const eventConsumer = client.consumers.get(consumerInfo.stream_name, consumerInfo.name);
-                    (yield eventConsumer).consume({ callback: (message) => {
-                            if (message) {
-                                return this.handleJetStreamMessage(message, handler);
-                            }
-                        } });
+                    const eventConsumer = yield client.consumers.get(consumerInfo.stream_name, consumerInfo.name);
+                    this.consumeWithHeartbeatRecovery(eventConsumer, handler, pattern);
                     this.logger.log(`Subscribed to ${pattern} events`);
                 }
                 catch (error) {
@@ -181,6 +182,72 @@ class NatsTransportStrategy extends microservices_1.Server {
                 }
             }
         });
+    }
+    /**
+     * Runs consume() for an event pattern and re-establishes it whenever the
+     * server stops sending heartbeats.
+     *
+     * @nats-io/jetstream auto-recovers from most disruptions, but when it
+     * cannot, it reports "heartbeats_missed" and the consume sits idle forever
+     * — the handler goes quiet with no error and no crash. The documented
+     * remedy is to stop() the ConsumerMessages and create a new one.
+     *
+     * @see https://github.com/nats-io/nats.js/tree/main/jetstream#heartbeats
+     */
+    async consumeWithHeartbeatRecovery(consumer, handler, pattern) {
+        while (!this.stopped) {
+            let messages;
+            try {
+                messages = await consumer.consume({
+                    callback: (message) => {
+                        if (message) {
+                            return this.handleJetStreamMessage(message, handler);
+                        }
+                    }
+                });
+            }
+            catch (error) {
+                if (this.stopped) {
+                    return;
+                }
+                this.logger.error(`Cannot consume ${pattern} events: ${error.message}`);
+                await this.delay(RESUBSCRIBE_DELAY);
+                continue;
+            }
+            this.watchHeartbeats(messages, pattern);
+            // resolves when the consume ends, including when watchHeartbeats
+            // stops it after too many missed heartbeats
+            await messages.closed();
+            if (this.stopped) {
+                return;
+            }
+            this.logger.warn(`Consumer for ${pattern} events ended, re-subscribing`);
+            await this.delay(RESUBSCRIBE_DELAY);
+        }
+    }
+    /**
+     * Ends the consume once too many heartbeats go missing, so that
+     * consumeWithHeartbeatRecovery() can replace it with a fresh one.
+     */
+    async watchHeartbeats(messages, pattern) {
+        try {
+            for await (const status of await messages.status()) {
+                if (status.type !== "heartbeats_missed") {
+                    continue;
+                }
+                this.logger.warn(`${status.count} heartbeat(s) missed for ${pattern} events`);
+                if (status.count >= this.maxHeartbeatsMissed) {
+                    messages.stop();
+                    return;
+                }
+            }
+        }
+        catch (error) {
+            // the status iterator ends together with the consume it belongs to
+        }
+    }
+    delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
     subscribeToMessagePatterns(connection) {
         const messageHandlers = [...this.messageHandlers.entries()].filter(([, handler]) => !handler.isEventHandler);
