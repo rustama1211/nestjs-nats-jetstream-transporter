@@ -3,7 +3,7 @@ import { Logger } from "@nestjs/common";
 import { Codec, ConnectionOptions, Msg, NatsConnection } from "@nats-io/nats-core";
 import { Consumer, ConsumerMessages, JetStreamClient, JetStreamManager, JsMsg, StreamInfo } from "@nats-io/jetstream";
 import { noop } from "rxjs";
-import { NatsTransportStrategyOptions } from "./interfaces/nats-transport-strategy-options.interface";
+import { NatsFetchOptions, NatsTransportStrategyOptions } from "./interfaces/nats-transport-strategy-options.interface";
 import { NatsStreamConfig } from "./interfaces/nats-stream-config.interface";
 export declare class NatsTransportStrategy extends Server implements CustomTransportStrategy {
     protected readonly options: NatsTransportStrategyOptions;
@@ -14,6 +14,8 @@ export declare class NatsTransportStrategy extends Server implements CustomTrans
     protected jetstreamManager?: JetStreamManager;
     protected stopped: boolean;
     protected readonly maxHeartbeatsMissed: number;
+    /** Resolved form of `options.fetch`, or null when consume() is used. */
+    protected readonly fetchOptions: Required<NatsFetchOptions> | null;
     constructor(options?: NatsTransportStrategyOptions);
     listen(callback: typeof noop): Promise<void>;
     close(): Promise<void>;
@@ -30,6 +32,12 @@ export declare class NatsTransportStrategy extends Server implements CustomTrans
     handleNatsMessage(message: Msg, handler: MessageHandler): Promise<void>;
     handleStatusUpdates(connection: NatsConnection): Promise<void>;
     subscribeToEventPatterns(client: JetStreamClient, jsm: JetStreamManager): Promise<void>;
+    /**
+     * Consumes an event pattern with back to back fetch() calls, which end on
+     * missed heartbeats instead of idling, so the next one takes over.
+     * @see https://github.com/nats-io/nats.js/tree/main/jetstream#heartbeats
+     */
+    fetchWithRecovery(consumer: Consumer, handler: MessageHandler, pattern: string): Promise<void>;
     /**
      * Consumes an event pattern, re-establishing the consume whenever it ends
      * because the server stopped sending heartbeats.

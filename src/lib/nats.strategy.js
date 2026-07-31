@@ -11,8 +11,11 @@ const rxjs_1 = require("rxjs");
 const nats_context_1 = require("./nats.context");
 const nats_constants_1 = require("./nats.constants");
 const nats_codec_1 = require("./nats.codec");
-/** How long to wait before re-establishing a consume that ended. */
+/** How long to wait before re-establishing a consume or fetch that ended. */
 const RESUBSCRIBE_DELAY = 1000;
+/** Defaults for `options.fetch`. */
+const FETCH_BATCH = 10;
+const FETCH_EXPIRES = 30000;
 class NatsTransportStrategy extends microservices_1.Server {
     constructor(options = {}) {
         super();
@@ -21,6 +24,12 @@ class NatsTransportStrategy extends microservices_1.Server {
         this.logger = new common_1.Logger("NatsServer");
         this.stopped = false;
         this.maxHeartbeatsMissed = options.maxHeartbeatsMissed || 2;
+        this.fetchOptions = options.fetch
+            ? {
+                batch: (options.fetch === true ? undefined : options.fetch.batch) || FETCH_BATCH,
+                expires: (options.fetch === true ? undefined : options.fetch.expires) || FETCH_EXPIRES
+            }
+            : null;
     }
     listen(callback) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -171,7 +180,12 @@ class NatsTransportStrategy extends microservices_1.Server {
                         consumerInfo = yield jsm.consumers.update(pattern, defaultConsumerName, consumerConfig);
                     }
                     const eventConsumer = yield client.consumers.get(consumerInfo.stream_name, consumerInfo.name);
-                    this.consumeWithHeartbeatRecovery(eventConsumer, handler, pattern);
+                    if (this.fetchOptions) {
+                        this.fetchWithRecovery(eventConsumer, handler, pattern);
+                    }
+                    else {
+                        this.consumeWithHeartbeatRecovery(eventConsumer, handler, pattern);
+                    }
                     this.logger.log(`Subscribed to ${pattern} events`);
                 }
                 catch (error) {
@@ -182,6 +196,41 @@ class NatsTransportStrategy extends microservices_1.Server {
                 }
             }
         });
+    }
+    /**
+     * Runs back to back fetch() calls for an event pattern.
+     *
+     * Unlike a consume, a fetch treats missed heartbeats as fatal: it ends the
+     * batch with an error instead of leaving a subscription that is open but
+     * receiving nothing. There is no miss to count and no subscription to
+     * stop, so recovery is just issuing the next fetch.
+     *
+     * Messages are dispatched without awaiting, which keeps the concurrency
+     * the same as consume()'s callback. handleJetStreamMessage() settles every
+     * message itself and never rejects.
+     *
+     * @see https://github.com/nats-io/nats.js/tree/main/jetstream#heartbeats
+     */
+    async fetchWithRecovery(consumer, handler, pattern) {
+        const { batch, expires } = this.fetchOptions;
+        while (!this.stopped) {
+            try {
+                const messages = await consumer.fetch({
+                    max_messages: batch,
+                    expires
+                });
+                for await (const message of messages) {
+                    this.handleJetStreamMessage(message, handler);
+                }
+            }
+            catch (error) {
+                if (this.stopped) {
+                    return;
+                }
+                this.logger.warn(`Fetch for ${pattern} events ended (${error.message}), retrying`);
+                await this.delay(RESUBSCRIBE_DELAY);
+            }
+        }
     }
     /**
      * Runs consume() for an event pattern and re-establishes it whenever the
